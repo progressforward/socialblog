@@ -46,19 +46,19 @@ class Role(db.Model):
             db.session.add(role)
         db.session.commit()
         
-        def add_permission(self, perm):
-            if not self.has_permission(perm):
-                self.permissions += perm
+    def add_permission(self, perm):
+        if not self.has_permission(perm):
+            self.permissions += perm
                 
-        def remove_permission(self, perm):
-            if self.has_permission(perm):
-                self.permissions -= perm
+    def remove_permission(self, perm):
+        if self.has_permission(perm):
+            self.permissions -= perm
                 
-        def reset_permissions(self):
-            self.permissions = 0
+    def reset_permissions(self):
+        self.permissions = 0
             
-        def has_permission(self, perm):
-            return self.permissions & perm == perm
+    def has_permission(self, perm):
+        return self.permissions & perm == perm
     
     def __repr__(self):
         return '<Role %r>' % self.name
