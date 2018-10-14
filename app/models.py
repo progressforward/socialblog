@@ -5,7 +5,7 @@ from app import db
 from flask_login import UserMixin, AnonymousUserMixin
 from . import login_manager
 from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
-from flask import current_app
+from flask import current_app, request
 
 class Permission:
     FOLLOW = 1
@@ -70,6 +70,7 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(64), unique=True, index=True)
     password_hash = db.Column(db.String(128))
     role_id = db.Column(db.Integer, db.ForeignKey('roles.id'))
+    #role = db.relationship(Role)
     confirmed = db.Column(db.Boolean, default=False)
     avatar_hash = db.Column(db.String(32))
     name = db.Column(db.String(64))
@@ -77,6 +78,7 @@ class User(UserMixin, db.Model):
     about_me = db.Column(db.Text())
     member_since = db.Column(db.DateTime(), default=datetime.utcnow)
     last_seen = db.Column(db.DateTime(), default=datetime.utcnow)
+    posts = db.relationship('Post', backref='author', lazy='dynamic')
 
     def __init__(self, **kwargs):
         super(User, self).__init__(**kwargs)
@@ -85,6 +87,15 @@ class User(UserMixin, db.Model):
                 self.role = Role.query.filter_by(name='Administrator').first()
             if self.role is None:
                 self.role = Role.query.filter_by(default=True).first()
+            db.session.add(self)
+            db.session.commit()
+        if self.email is not None and self.avatar_hash is None:
+            self.avatar_hash = self.gravatar_hash
+            
+    def gravatar(self, size=100, default='identicon', rating='g'):
+        url = 'https://secure.gravatar.com/avatar'
+        hash = self.avatar_hash or self.gravatar_hash()
+        return '{url}/{hash}?s={size}&d={default}&r={rating}'.format(url=url, hash=hash, size=size, default=default, rating=rating)
     
     def can(self, perm):
         return self.role is not None and self.role.has_permission(perm)
@@ -95,6 +106,7 @@ class User(UserMixin, db.Model):
     def ping(self):
         self.last_seen = datetime.utcnow()
         db.session.add(self)
+        db.session.commit()
     
     def generate_confirmation_token(self, expiration=3600):
         s = Serializer(current_app.config['SECRET_KEY'], expiration)
@@ -110,6 +122,7 @@ class User(UserMixin, db.Model):
             return False
         self.confirmed = True
         db.session.add(self)
+        db.session.commit()
         return True
     
     def __repr__(self):
@@ -142,6 +155,7 @@ class User(UserMixin, db.Model):
             return False
         user.password = new_password
         db.session.add(user)
+        db.session.commit()
         return True
 
     def generate_email_change_token(self, new_email, expiration=3600):
@@ -164,6 +178,7 @@ class User(UserMixin, db.Model):
         self.email = new_email
         self.avatar_hash = self.gravatar_hash()
         db.session.add(self)
+        db.session.commit()
         return True
 
     def gravatar_hash(self):
@@ -177,6 +192,13 @@ class AnonymousUser(AnonymousUserMixin):
         return False
         
 login_manager.anonymous_user = AnonymousUser
+
+class Post(db.Model):
+    __tablename__ = "posts"
+    id = db.Column(db.Integer, primary_key=True)
+    body = db.Column(db.Text)
+    timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
+    author_id = db.Column(db.Integer, db.ForeignKey('users.id'))
 
 @login_manager.user_loader
 def load_user(user_id):
