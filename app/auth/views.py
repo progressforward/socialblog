@@ -30,8 +30,8 @@ def register():
     form = RegistrationForm()
     if form.validate_on_submit():
         user = User(email=form.email.data, username=form.username.data, password=form.password.data)
-        #db.session.add(user)
-        #db.session.commit()
+        db.session.add(user)
+        db.session.commit()
         token = user.generate_confirmation_token()
         send_mail(user.email, 'Confirm Your Account', 'auth/email/confirm', user=user, token=token)
         flash('A confirmation email has been sent ot you by email.')

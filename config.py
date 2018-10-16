@@ -16,6 +16,7 @@ class Config:
     @staticmethod
     def init_app(app):
         pass
+        
 class DevelopmentConfig(Config):
     DEBUG = True
     MAIL_SERVER = 'smtp.163.com'

@@ -5,9 +5,10 @@ from app import db
 from flask_login import UserMixin, AnonymousUserMixin
 from . import login_manager
 from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
-from flask import current_app, request
+from flask import current_app, request, url_for
 from markdown import markdown
 import bleach
+from .exceptions import ValidationError
 
 class Permission:
     FOLLOW = 1
@@ -81,6 +82,17 @@ class Comment(db.Model):
     author_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     post_id = db.Column(db.Integer, db.ForeignKey('posts.id'))
     
+    def to_json(self):
+        json_comment = {
+            'url': url_for('api.get_comment', id=self.id),
+            'post_url': url_for('api.get_post', id=self.id),
+            'body': self.body,
+            'body_html': self.body_html,
+            'timestamp': self.timestamp,
+            'author_url': url_for('api.get_user', id=self.author_id)
+        }
+        return json_comment
+        
     @staticmethod
     def on_changed_body(target, value, oldvalue, initiator):
         allowed_tags = ['a', 'abbr', 'acronym', 'b','code', 'em', 'i', 'strong']
@@ -94,8 +106,8 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(128))
     role_id = db.Column(db.Integer, db.ForeignKey('roles.id'))
     #role = db.relationship(Role)
-    confirmed = db.Column(db.Boolean, default=False)
     avatar_hash = db.Column(db.String(32))
+    confirmed = db.Column(db.Boolean, default=False)
     name = db.Column(db.String(64))
     location = db.Column(db.String(64))
     about_me = db.Column(db.Text())
@@ -115,11 +127,23 @@ class User(UserMixin, db.Model):
                 self.role = Role.query.filter_by(name='Administrator').first()
             if self.role is None:
                 self.role = Role.query.filter_by(default=True).first()
-            db.session.add(self)
-            db.session.commit()
+            #db.session.add(self)
+            #db.session.commit()
         if self.email is not None and self.avatar_hash is None:
-            self.avatar_hash = self.gravatar_hash
+            self.avatar_hash = self.gravatar_hash()
         self.follow(self)
+        
+    def to_json(self):
+        json_user = {
+            'url': url_for('api.get_post', id=self.id, _external=True),
+            'username': self.username,
+            'member_since': self.member_since,
+            'last_seen': self.last_seen,
+            'posts': url_for('api.get_user_posts', id=self.id, _external=True),
+            'followed_posts': url_for('api.get_user_followed_posts', id=self.id, _external=True),
+            'post_count': self.posts.count()
+        }
+        return json_user
         
     @staticmethod
     def add_self_follows():
@@ -220,6 +244,19 @@ class User(UserMixin, db.Model):
     def generate_email_change_token(self, new_email, expiration=3600):
         s = Serializer(current_app.config['SECRET_KEY'], expiration)
         return s.dumps({'change_email': self.id, 'new_email': new_email}).decode('utf-8')
+        
+    def generate_auth_token(self, expiration):
+        s = Serializer(current_app.config['SECRET_KEY'], expires_in = expiration)
+        return s.dumps({'id': self.id}).decode('utf-8')
+        
+    @staticmethod
+    def verify_auth_token(token):
+        s = Serializer(current_app.config['SECRET_KEY'])
+        try:
+            data = s.loads(token.encode('utf-8'))
+        except:
+            return None
+        return User.query.get(data['id'])
 
     def change_email(self, token):
         s = Serializer(current_app.config['SECRET_KEY'])
@@ -250,22 +287,22 @@ class User(UserMixin, db.Model):
         import forgery_py
         
         seed()
-        r = Role.query.filter_by(name='User').first()
+        #r = Role.query.filter_by(name='User').first()
         for i in range(count):
             u = User(email=forgery_py.internet.email_address(),
                 username=forgery_py.internet.user_name(True),
                 password=forgery_py.lorem_ipsum.word(),
-                role= r,
+                #role= r,
                 confirmed=True,
                 name=forgery_py.name.full_name(),
                 location=forgery_py.address.city(),
                 about_me=forgery_py.lorem_ipsum.sentence(),
                 member_since=forgery_py.date.date(True))
-        db.session.add(u)
-        try:
-            db.session.commit()
-        except:
-            db.session.rollback()
+            db.session.add(u)
+            try:
+                db.session.commit()
+            except:
+                db.session.rollback()
             
 
 class AnonymousUser(AnonymousUserMixin):
@@ -285,6 +322,25 @@ class Post(db.Model):
     timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
     author_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     comments = db.relationship('Comment', backref='post', lazy='dynamic')
+    
+    def to_json(self):
+        json_post = {
+            'url': url_for('api.get_post', id=self.id, _external=True),
+            'body': self.body,
+            'body_html': self.body_html,
+            'timestamp': self.timestamp,
+            'author': url_for('api.get_user', id=self.author_id, _external=True),
+            'comments': url_for('api.get_post_comments', id=self.id, _external=True),
+            'comment_count': self.comments.count()
+        }
+        return json_post
+        
+    @staticmethod
+    def from_json(json_post):
+        body = json_post.get('body')
+        if body is None or body == '':
+            raise ValidationErrors('post does not have a body.')
+        return Post(body=body)
     
     @staticmethod
     def on_changed_body(target, value, oldvalue, initiator):
