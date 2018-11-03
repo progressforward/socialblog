@@ -17,7 +17,7 @@ class EditProfileForm(Form):
     
 class EditProfileAdminForm(Form):
     email = StringField('Email', validators=[Required(), Length(1, 64), Email()])
-    username = StringField('Username', validators=[Required(), Length(1, 64), Regexp('^[A-Za-z][A-Za-z0-9.]*$', 
+    username = StringField('Username', validators=[Required(), Length(1, 64), Regexp('^[A-Za-z0-9_.]*$', 
         0, 'Usernames must have only letters, numbers, dots or underscores')])
     confirmed = BooleanField('Confirmed')
     role = SelectField('Role', coerce=int)
@@ -32,7 +32,7 @@ class EditProfileAdminForm(Form):
         self.user = user
         
     def validate_email(self, field):
-        if field.data != self.user.email and User.query.filter_by(email=field.email).first():
+        if field.data != self.user.email and User.query.filter_by(email=field.data).first():
             raise ValidationError('Email already registered.')
             
     def validate_username(self, field):

@@ -85,13 +85,20 @@ class Comment(db.Model):
     def to_json(self):
         json_comment = {
             'url': url_for('api.get_comment', id=self.id),
-            'post_url': url_for('api.get_post', id=self.id),
+            'post_url': url_for('api.get_post', id=self.post_id),
             'body': self.body,
             'body_html': self.body_html,
             'timestamp': self.timestamp,
             'author_url': url_for('api.get_user', id=self.author_id)
         }
         return json_comment
+        
+    @staticmethod
+    def from_json(json_comment):
+        body = json_comment.get('body')
+        if body is None or body == '':
+            raise ValidationError('comment does not have a body')
+        return Comment(body=body)
         
     @staticmethod
     def on_changed_body(target, value, oldvalue, initiator):
@@ -135,12 +142,12 @@ class User(UserMixin, db.Model):
         
     def to_json(self):
         json_user = {
-            'url': url_for('api.get_post', id=self.id, _external=True),
+            'url': url_for('api.get_user', id=self.id),
             'username': self.username,
             'member_since': self.member_since,
             'last_seen': self.last_seen,
-            'posts': url_for('api.get_user_posts', id=self.id, _external=True),
-            'followed_posts': url_for('api.get_user_followed_posts', id=self.id, _external=True),
+            'posts_url': url_for('api.get_user_posts', id=self.id, _external=True),
+            'followed_posts_url': url_for('api.get_user_followed_posts', id=self.id, _external=True),
             'post_count': self.posts.count()
         }
         return json_user
@@ -209,7 +216,7 @@ class User(UserMixin, db.Model):
         return True
     
     def __repr__(self):
-        return '<User %r>' % self.name
+        return '<User %r>' % self.username
 
     @property
     def password(self):
@@ -280,7 +287,7 @@ class User(UserMixin, db.Model):
     def gravatar_hash(self):
         return hashlib.md5(self.email.lower().encode('utf-8')).hexdigest()
         
-    @staticmethod
+    '''@staticmethod
     def generate_fake(count=100):
         from sqlalchemy.exc import IntegrityError
         from random import seed
@@ -302,7 +309,7 @@ class User(UserMixin, db.Model):
             try:
                 db.session.commit()
             except:
-                db.session.rollback()
+                db.session.rollback()'''
             
 
 class AnonymousUser(AnonymousUserMixin):
@@ -325,7 +332,7 @@ class Post(db.Model):
     
     def to_json(self):
         json_post = {
-            'url': url_for('api.get_post', id=self.id, _external=True),
+            'url': url_for('api.get_post', id=self.id),
             'body': self.body,
             'body_html': self.body_html,
             'timestamp': self.timestamp,
@@ -339,7 +346,7 @@ class Post(db.Model):
     def from_json(json_post):
         body = json_post.get('body')
         if body is None or body == '':
-            raise ValidationErrors('post does not have a body.')
+            raise ValidationError('post does not have a body.')
         return Post(body=body)
     
     @staticmethod
@@ -347,7 +354,7 @@ class Post(db.Model):
         allowed_tags = ['a', 'abbr', 'acronym', 'b', 'blockquote', 'code', 'em', 'i', 'li', 'ol', 'pre', 'strong', 'ul', 'h1', 'h2', 'h3', 'p']
         target.body_html = bleach.linkify(bleach.clean(markdown(value, output_format='html'), tags=allowed_tags, strip=True))
     
-    @staticmethod
+    '''@staticmethod
     def generate_fake(count=100):
         from random import seed, randint
         import forgery_py
@@ -360,7 +367,7 @@ class Post(db.Model):
                 timestamp=forgery_py.date.date(True),
                 author=u)
             db.session.add(p)
-            db.session.commit()
+            db.session.commit()'''
             
 db.event.listen(Post.body, 'set', Post.on_changed_body)
 db.event.listen(Comment.body, 'set', Comment.on_changed_body)

@@ -106,7 +106,7 @@ def password_reset(token):
     form = PasswordResetForm()
     if form.validate_on_submit():
         if User.reset_password(token, form.password.data):
-            db.session.commit()
+            #db.session.commit()
             flash('Your password has been updated.')
             return redirect(url_for('auth.login'))
         else:
@@ -132,7 +132,7 @@ def change_email_request():
 @login_required
 def change_email(token):
     if current_user.change_email(token):
-        db.session.commit()
+        #db.session.commit()
         flash('Your email address has been updated.')
     else:
         flash('Invalid request.')

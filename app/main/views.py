@@ -6,6 +6,26 @@ from .. import db
 from ..models import User, Role, Post, Permission, Comment
 from flask_login import current_user, login_required
 from ..decorator import permission_required, admin_required
+from flask_sqlalchemy import get_debug_queries
+
+@main.after_app_request
+def after_request(response):
+    for query in get_debug_queries():
+        if query.duration >= current_app.config['FLASKY_SLOW_DB_QUERY_TIME']:
+            current_app.logger.warning(
+                'Slow query: %s\nParameters: %s\nDuration: %fs\nContext: %s\n' % 
+                (query.statement, query.parameters, query.duration, query.context))
+    return response
+
+@main.route('/shutdown')
+def server_shutdown():
+    if not current_app.testing:
+        abort(404)
+    shutdown = request.environ.get('werkzeug.server.shutdown')
+    if not shutdown:
+        abort(500)
+    shutdown()
+    return 'Shutting down...'
 
 @main.route('/', methods=['GET', 'POST'])
 def index():
@@ -120,7 +140,11 @@ def post(id):
     pagination = post.comments.order_by(Comment.timestamp.asc()).paginate(page,
         per_page=current_app.config['FLASKY_COMMENTS_PER_PAGE'], error_out=False)
     comments = pagination.items
-    return render_template('post.html', posts=[post], form=form, comments=comments, pagination=pagination)
+    
+    '''moderate = False
+    if current_user.is_administrator() or post.author == current_user._get_current_object():
+        moderate = True'''
+    return render_template('post.html', posts=[post], form=form, comments=comments, pagination=pagination)#, moderate=moderate)
     
 @main.route('/moderate')
 @login_required
